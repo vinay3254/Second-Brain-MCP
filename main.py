@@ -241,5 +241,58 @@ def daily_context(date: str) -> list[dict]:
     return graph_db.get_daily_context(date)
 
 
+@mcp.tool()
+def create_note(title: str, body: str, tags: list[str] = None, wikilinks: list[str] = None) -> dict:
+    """
+    Creates a new markdown note in the vault with optional YAML frontmatter tags and wikilink mentions.
+    The file watcher will automatically index the note into the graph and vector databases.
+    Returns an error if a note with the same title already exists.
+
+    Args:
+        title: The note title (also used as filename).
+        body: The main content of the note.
+        tags: Optional list of tags to include in the YAML frontmatter.
+        wikilinks: Optional list of note titles to reference as [[wikilinks]] at the end of the body.
+    """
+    tags = tags or []
+    wikilinks = wikilinks or []
+
+    # Sanitize title for use as a filename
+    safe_title = re.sub(r'[<>:"/\\|?*]', '_', title).strip()
+    file_path = os.path.join(vault_path, f"{safe_title}.md")
+
+    if os.path.exists(file_path):
+        return {"error": f"A note named '{title}' already exists in the vault."}
+
+    # Build YAML frontmatter
+    frontmatter_lines = ["---", f"title: \"{title}\""]
+    if tags:
+        tag_str = ", ".join(f'"{t}"' for t in tags)
+        frontmatter_lines.append(f"tags: [{tag_str}]")
+    frontmatter_lines.append("---")
+    frontmatter_block = "\n".join(frontmatter_lines)
+
+    # Append wikilinks section if provided
+    wikilink_section = ""
+    if wikilinks:
+        links_formatted = "  ".join(f"[[{link}]]" for link in wikilinks)
+        wikilink_section = f"\n\n---\nRelated: {links_formatted}"
+
+    full_content = f"{frontmatter_block}\n\n{body}{wikilink_section}\n"
+
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        return {
+            "status": "created",
+            "title": title,
+            "file": file_path,
+            "tags": tags,
+            "wikilinks": wikilinks
+        }
+    except Exception as e:
+        return {"error": f"Failed to write note: {e}"}
+
+
 if __name__ == "__main__":
     mcp.run()
