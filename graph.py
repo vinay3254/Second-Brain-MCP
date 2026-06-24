@@ -321,3 +321,37 @@ class GraphDB:
                     "top_hub_notes": [{"title": t, "link_count": c} for t, c in top_hubs],
                     "recently_modified": recent_sorted
                 }
+
+    def get_orphan_notes(self) -> list[dict]:
+        """
+        Returns notes that have no incoming or outgoing [[wikilink]] connections —
+        completely isolated nodes in the knowledge graph.
+        Each result includes title, tags, and last_modified.
+        """
+        with self.lock:
+            with self.get_conn() as conn:
+                # Collect all notes that appear in at least one link (as source or target)
+                linked_res = conn.execute(
+                    "MATCH (a:Note)-[:Links]->(b:Note) RETURN DISTINCT a.title, b.title"
+                )
+                connected: set[str] = set()
+                while linked_res.has_next():
+                    row = linked_res.get_next()
+                    connected.add(row[0])
+                    connected.add(row[1])
+
+                # Return all notes NOT in the connected set
+                all_res = conn.execute(
+                    "MATCH (n:Note) RETURN n.title, n.tags, n.last_modified"
+                )
+                orphans = []
+                while all_res.has_next():
+                    row = all_res.get_next()
+                    title, tags, lm = row[0], row[1] or [], row[2] or ""
+                    if title not in connected:
+                        orphans.append({
+                            "title": title,
+                            "tags": tags,
+                            "last_modified": lm
+                        })
+                return sorted(orphans, key=lambda x: x["title"])

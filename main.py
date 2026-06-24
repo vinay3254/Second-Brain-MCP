@@ -361,5 +361,16 @@ def rename_note(old_title: str, new_title: str) -> dict:
     }
 
 
+@mcp.tool()
+def get_orphan_notes() -> list[dict]:
+    """
+    Returns all notes that have no incoming or outgoing [[wikilink]] connections —
+    completely isolated nodes in the knowledge graph.
+    Useful for identifying forgotten or disconnected notes that may need linking.
+    Each result includes title, tags, and last_modified.
+    """
+    return graph_db.get_orphan_notes()
+
+
 if __name__ == "__main__":
     mcp.run()
