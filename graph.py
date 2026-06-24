@@ -257,3 +257,67 @@ class GraphDB:
                             "last_modified": n_last_modified
                         })
                 return sorted(results, key=lambda x: x["last_modified"] or "", reverse=True)
+
+    def get_note_stats(self) -> dict:
+        """
+        Returns vault-wide statistics:
+        - total notes, total links, unique tags
+        - average note body length (characters)
+        - top 10 hub notes (most incoming + outgoing links)
+        - top 10 most recently modified notes
+        """
+        with self.lock:
+            with self.get_conn() as conn:
+                # Gather all notes
+                notes_res = conn.execute(
+                    "MATCH (n:Note) RETURN n.title, n.body, n.tags, n.last_modified"
+                )
+                total_notes = 0
+                total_chars = 0
+                tag_set: set[str] = set()
+                recent_notes: list[dict] = []
+
+                while notes_res.has_next():
+                    row = notes_res.get_next()
+                    t, body, tags, lm = row[0], row[1] or "", row[2] or [], row[3] or ""
+                    total_notes += 1
+                    total_chars += len(body)
+                    for tag in tags:
+                        if tag:
+                            tag_set.add(tag)
+                    recent_notes.append({"title": t, "last_modified": lm})
+
+                # Count all links
+                links_res = conn.execute("MATCH (a:Note)-[:Links]->(b:Note) RETURN count(*)")
+                total_links = 0
+                if links_res.has_next():
+                    total_links = links_res.get_next()[0]
+
+                # Hub notes: count degree (in + out) per note
+                degree: dict[str, int] = {}
+                deg_res = conn.execute(
+                    "MATCH (a:Note)-[:Links]->(b:Note) RETURN a.title, b.title"
+                )
+                while deg_res.has_next():
+                    row = deg_res.get_next()
+                    src, tgt = row[0], row[1]
+                    degree[src] = degree.get(src, 0) + 1
+                    degree[tgt] = degree.get(tgt, 0) + 1
+
+                top_hubs = sorted(degree.items(), key=lambda x: x[1], reverse=True)[:10]
+
+                # Sort recently modified
+                recent_sorted = sorted(
+                    recent_notes, key=lambda x: x["last_modified"] or "", reverse=True
+                )[:10]
+
+                avg_length = round(total_chars / total_notes, 1) if total_notes else 0
+
+                return {
+                    "total_notes": total_notes,
+                    "total_links": total_links,
+                    "unique_tags": len(tag_set),
+                    "avg_note_length_chars": avg_length,
+                    "top_hub_notes": [{"title": t, "link_count": c} for t, c in top_hubs],
+                    "recently_modified": recent_sorted
+                }

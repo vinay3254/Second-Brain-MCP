@@ -96,6 +96,20 @@ def search_by_tag(tag: str) -> list[dict]:
 
 
 @mcp.tool()
+def get_note_stats() -> dict:
+    """
+    Returns vault-wide statistics including:
+    - total_notes: number of notes indexed
+    - total_links: number of [[wikilink]] relationships
+    - unique_tags: number of distinct tags
+    - avg_note_length_chars: average note body size in characters
+    - top_hub_notes: top 10 most-connected notes (highest in+out link count)
+    - recently_modified: top 10 most recently changed notes
+    """
+    return graph_db.get_note_stats()
+
+
+@mcp.tool()
 def surface_contradictions(topic: str) -> list[dict]:
     """
     Finds notes with conflicting statements on a given topic using local semantic search and NLI/lexical checks.
