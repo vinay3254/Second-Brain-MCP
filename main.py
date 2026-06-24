@@ -294,5 +294,72 @@ def create_note(title: str, body: str, tags: list[str] = None, wikilinks: list[s
         return {"error": f"Failed to write note: {e}"}
 
 
+@mcp.tool()
+def rename_note(old_title: str, new_title: str) -> dict:
+    """
+    Renames an existing note and updates all [[wikilink]] references to it across the entire vault.
+    The renamed file is re-indexed in both the graph and vector databases.
+
+    Args:
+        old_title: The current title of the note to rename.
+        new_title: The desired new title.
+    """
+    old_safe = re.sub(r'[<>:"/\\|?*]', '_', old_title).strip()
+    new_safe = re.sub(r'[<>:"/\\|?*]', '_', new_title).strip()
+
+    old_path = os.path.join(vault_path, f"{old_safe}.md")
+    new_path = os.path.join(vault_path, f"{new_safe}.md")
+
+    if not os.path.exists(old_path):
+        return {"error": f"Note '{old_title}' not found in the vault."}
+    if os.path.exists(new_path):
+        return {"error": f"A note named '{new_title}' already exists in the vault."}
+
+    updated_files = []
+
+    # Walk vault and replace all [[old_title]] references in other markdown files
+    for root, _, files in os.walk(vault_path):
+        for fname in files:
+            if not fname.endswith('.md'):
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                # Match [[old_title]], [[old_title|alias]], [[old_title#section]]
+                pattern = re.compile(
+                    r'\[\[' + re.escape(old_title) + r'([\]|#])',
+                    re.IGNORECASE
+                )
+                new_content = pattern.sub(f'[[{new_title}' + r'\1', content)
+                if new_content != content:
+                    with open(fpath, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    updated_files.append(os.path.basename(fpath))
+            except Exception:
+                pass
+
+    # Rename the note file itself
+    try:
+        os.rename(old_path, new_path)
+    except Exception as e:
+        return {"error": f"Failed to rename file: {e}"}
+
+    # Remove old note from DBs (watcher will pick up the new file, but we clean up old entry)
+    try:
+        graph_db.delete_note(old_title)
+        vector_db.delete_note(old_title)
+    except Exception:
+        pass
+
+    return {
+        "status": "renamed",
+        "old_title": old_title,
+        "new_title": new_title,
+        "new_file": new_path,
+        "references_updated_in": updated_files
+    }
+
+
 if __name__ == "__main__":
     mcp.run()
