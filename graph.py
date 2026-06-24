@@ -177,6 +177,23 @@ class GraphDB:
                                 related.add(t)
                     return sorted(list(related))
 
+    def list_all_notes(self) -> list[dict]:
+        """Returns all notes in the vault with title, tags, and last_modified."""
+        with self.lock:
+            with self.get_conn() as conn:
+                res = conn.execute(
+                    "MATCH (n:Note) RETURN n.title, n.tags, n.last_modified ORDER BY n.last_modified DESC"
+                )
+                notes = []
+                while res.has_next():
+                    row = res.get_next()
+                    notes.append({
+                        "title": row[0],
+                        "tags": row[1],
+                        "last_modified": row[2]
+                    })
+                return notes
+
     def get_daily_context(self, date_str: str) -> list[dict]:
         """Returns notes tagged with that date or modified on that day."""
         with self.lock:

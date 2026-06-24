@@ -50,6 +50,15 @@ def search_notes(query: str) -> list[dict]:
 
 
 @mcp.tool()
+def list_all_notes() -> list[dict]:
+    """
+    Returns all notes stored in the vault, ordered by last-modified date (newest first).
+    Each entry contains: title, tags, and last_modified timestamp.
+    """
+    return graph_db.list_all_notes()
+
+
+@mcp.tool()
 def get_note(title: str) -> dict:
     """
     Retrieves the full content, tags, outgoing links, and incoming backlinks for a specific note from the graph.
