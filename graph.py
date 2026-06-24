@@ -222,3 +222,38 @@ class GraphDB:
                             "last_modified": n_last_modified
                         })
                 return results
+
+    def list_tags(self) -> list[dict]:
+        """Returns all unique tags across the vault with note counts, sorted by count descending."""
+        with self.lock:
+            with self.get_conn() as conn:
+                res = conn.execute("MATCH (n:Note) RETURN n.tags")
+                tag_counts: dict[str, int] = {}
+                while res.has_next():
+                    row = res.get_next()
+                    tags = row[0] or []
+                    for tag in tags:
+                        if tag:
+                            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                return [
+                    {"tag": tag, "count": count}
+                    for tag, count in sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+                ]
+
+    def search_by_tag(self, tag: str) -> list[dict]:
+        """Returns all notes that have the specified tag (case-insensitive match)."""
+        with self.lock:
+            with self.get_conn() as conn:
+                res = conn.execute("MATCH (n:Note) RETURN n.title, n.tags, n.last_modified")
+                results = []
+                tag_lower = tag.lower().strip()
+                while res.has_next():
+                    row = res.get_next()
+                    n_title, n_tags, n_last_modified = row[0], row[1] or [], row[2]
+                    if any(t.lower().strip() == tag_lower for t in n_tags):
+                        results.append({
+                            "title": n_title,
+                            "tags": n_tags,
+                            "last_modified": n_last_modified
+                        })
+                return sorted(results, key=lambda x: x["last_modified"] or "", reverse=True)

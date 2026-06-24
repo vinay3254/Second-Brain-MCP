@@ -78,6 +78,24 @@ def find_related(title: str) -> list[str]:
 
 
 @mcp.tool()
+def list_tags() -> list[dict]:
+    """
+    Returns all unique tags used across the vault, each with a note count.
+    Results are sorted by usage count (most-used tags first).
+    """
+    return graph_db.list_tags()
+
+
+@mcp.tool()
+def search_by_tag(tag: str) -> list[dict]:
+    """
+    Returns all notes that carry the specified tag (case-insensitive).
+    Each result includes the note title, its full tag list, and last_modified date.
+    """
+    return graph_db.search_by_tag(tag)
+
+
+@mcp.tool()
 def surface_contradictions(topic: str) -> list[dict]:
     """
     Finds notes with conflicting statements on a given topic using local semantic search and NLI/lexical checks.
